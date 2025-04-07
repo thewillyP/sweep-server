@@ -8,4 +8,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY server.py .
 
-ENTRYPOINT ["python", "server.py"]
+ENTRYPOINT ["python", "/app/server.py"]
