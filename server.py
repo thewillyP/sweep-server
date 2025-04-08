@@ -1,4 +1,3 @@
-# server.py
 import yaml
 import itertools
 import uuid
@@ -98,21 +97,4 @@ def app_main(db_host, db_port, db_name, db_user, db_password):
         password=db_password,
         cursor_factory=RealDictCursor
     )
-    init_db()
     return create_app(db_pool)
-
-def init_db():
-    conn = db_pool.getconn()
-    try:
-        with conn.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS sweeps (
-                    id SERIAL PRIMARY KEY,
-                    sweep_id VARCHAR(32) NOT NULL,
-                    config JSONB NOT NULL,
-                    status VARCHAR(20) DEFAULT 'pending'
-                );
-            """)
-            conn.commit()
-    finally:
-        db_pool.putconn(conn)
