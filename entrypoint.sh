@@ -10,4 +10,5 @@ DB_PASSWORD="${DB_PASSWORD:-password}"
 PORT="${PORT:-5000}"  # default to 5000 if not provided
 
 # Run Gunicorn with arguments passed to app_main
+cd /app
 exec gunicorn "server:app_main(db_host='$DB_HOST', db_port='$DB_PORT', db_name='$DB_NAME', db_user='$DB_USER', db_password='$DB_PASSWORD')" -b 0.0.0.0:$PORT -w 4
