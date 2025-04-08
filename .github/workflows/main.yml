@@ -8,6 +8,7 @@ on:
       - entrypoint.sh
       - requirements.txt
       - .github/workflows/**
+      - server.py
     branches:
       - 'main'
     tags:
