@@ -12,27 +12,29 @@ db_pool = None
 def create_app(db_pool):
     app = Flask(__name__)
 
-    # Generate all combinations for grid search
     def generate_sweep_configs(config):
         parameters = config['parameters']
         keys = [k for k, v in parameters.items() if 'values' in v]
         values = [parameters[k]['values'] for k in keys]
         
-        base_config = {}
+        # Separate hyperparameters from metadata
+        hyperparameters = {}
         for k, v in parameters.items():
             if 'value' in v:
-                base_config[k] = v['value']
+                hyperparameters[k] = v['value']
             elif 'values' in v:
-                base_config[k] = v['values'][0]
-        base_config.update({k: v for k, v in config.items() if k != 'parameters'})
-        base_config['program'] = config['program']
+                hyperparameters[k] = v['values'][0]
         
         sweep_configs = []
         for combo in itertools.product(*values):
-            sweep_config = base_config.copy()
+            sweep_config = hyperparameters.copy()
             for key, val in zip(keys, combo):
                 sweep_config[key] = val
-            sweep_configs.append(sweep_config)
+            sweep_configs.append({
+                "program": config['program'],
+                "name": config['name'],
+                "config": sweep_config
+            })
         return sweep_configs
 
     @app.route('/upload_config', methods=['POST'])
@@ -74,7 +76,13 @@ def create_app(db_pool):
                     cur.execute("UPDATE sweeps SET status = 'running' WHERE id = %s",
                                 (sweep['id'],))
                     conn.commit()
-                    return jsonify({"sweep_id": sweep['sweep_id'], "config": sweep['config']}), 200
+                    config_data = json.loads(sweep['config'])
+                    return jsonify({
+                        "sweep_id": sweep['sweep_id'],
+                        "program": config_data['program'],
+                        "name": config_data['name'],
+                        "config": config_data['config']
+                    }), 200
                 else:
                     cur.execute("SELECT COUNT(*) FROM sweeps WHERE sweep_id = %s AND status = 'pending'", (sweep_id,))
                     if cur.fetchone()['count'] == 0:
@@ -85,7 +93,6 @@ def create_app(db_pool):
 
     return app
 
-# This function is called by gunicorn via: `server:app_main(...)`
 def app_main(db_host, db_port, db_name, db_user, db_password):
     global db_pool
     db_pool = psycopg2.pool.SimpleConnectionPool(
