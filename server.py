@@ -76,7 +76,7 @@ def create_app(db_pool):
                     cur.execute("UPDATE sweeps SET status = 'running' WHERE id = %s",
                                 (sweep['id'],))
                     conn.commit()
-                    config_data = json.loads(sweep['config'])
+                    config_data = sweep['config']
                     return jsonify({
                         "sweep_id": sweep['sweep_id'],
                         "program": config_data['program'],
