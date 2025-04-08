@@ -37,13 +37,21 @@ def init_db(conn):
 # Generate all combinations for grid search
 def generate_sweep_configs(config):
     parameters = config['parameters']
+    # Identify keys with 'values' for grid search
     keys = [k for k, v in parameters.items() if 'values' in v]
     values = [parameters[k]['values'] for k in keys]
     
-    base_config = {k: v.get('value', v['values'][0]) for k, v in parameters.items()}
+    # Build base config, using 'value' if present, otherwise skip if only 'values'
+    base_config = {}
+    for k, v in parameters.items():
+        if 'value' in v:
+            base_config[k] = v['value']
+        elif 'values' in v:
+            base_config[k] = v['values'][0]  # Use first value as default
     base_config.update({k: v for k, v in config.items() if k != 'parameters'})
     base_config['program'] = config['program']  # Ensure the program path is included
     
+    # Generate sweep combinations
     sweep_configs = []
     for combo in itertools.product(*values):
         sweep_config = base_config.copy()
