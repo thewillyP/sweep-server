@@ -19,5 +19,5 @@ singularity run --containall --cleanenv \
     --env DB_NAME="$POSTGRES_DB" \
     --env DB_USER="$POSTGRES_USER" \
     --env DB_PASSWORD="$POSTGRES_PASSWORD" \
-    --env PORT="$SERVER_PORT" \
+    --env PORT="$SWEEP_PORT" \
     docker://thewillyp/sweep-server:main-14
