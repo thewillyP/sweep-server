@@ -9,6 +9,7 @@ on:
       - requirements.txt
       - .github/workflows/**
       - server.py
+      - init_db.py
     branches:
       - 'main'
     tags:
