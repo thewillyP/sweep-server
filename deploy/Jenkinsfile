@@ -104,7 +104,7 @@ EOF' | awk '/Submitted batch job/ {print \$4}'
 DB_HOST=\$(sacct -j ${env.DB_JOB_ID} --format=NodeList -n | head -1 | tr -d '[:space:]')
 
 singularity run --containall --cleanenv \
-  --env DB_HOST=$DB_HOST \
+  --env DB_HOST=$DB_HOST \\
   --env DB_PORT=${PGPORT} \\
   --env DB_NAME=${POSTGRES_DB} \\
   --env DB_USER=${POSTGRES_USER} \\
