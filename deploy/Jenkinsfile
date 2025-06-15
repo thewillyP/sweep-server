@@ -99,10 +99,10 @@ EOF' | awk '/Submitted batch job/ {print \$4}'
 #SBATCH --time=06:00:00
 #SBATCH --output=${LOG_DIR}/sweep_server-%j.out
 #SBATCH --error=${LOG_DIR}/sweep_server-%j.err
-#SBATCH --dependency=after:${env.DB_JOB_ID}+2
+#SBATCH --dependency=after:${env.DB_JOB_ID}
 
 DB_HOST=\$(sacct -j ${env.DB_JOB_ID} --format=NodeList -n | head -1 | tr -d '[:space:]')
-echo \$DB_HOST
+echo "DB_HOST is $DB_HOST for job ${env.DB_JOB_ID}"
 
 singularity run --containall --cleanenv \
   --env DB_HOST=\$DB_HOST \\
