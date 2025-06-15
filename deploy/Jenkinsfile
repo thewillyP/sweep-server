@@ -102,6 +102,7 @@ EOF' | awk '/Submitted batch job/ {print \$4}'
 #SBATCH --dependency=after:${env.DB_JOB_ID}+2
 
 DB_HOST=\$(sacct -j ${env.DB_JOB_ID} --format=NodeList -n | head -1 | tr -d '[:space:]')
+echo \$DB_HOST
 
 singularity run --containall --cleanenv \
   --env DB_HOST=\$DB_HOST \\
