@@ -1,0 +1,111 @@
+pipeline {
+    agent any
+
+    environment {
+        SSH_USER = 'wlp9800'
+        LOG_DIR = "/vast/${SSH_USER}/logs"
+        DB_PATH = "/scratch/${SSH_USER}/postgres"
+
+        POSTGRES_USER = credentials('postgres_user')
+        POSTGRES_PASSWORD = credentials('postgres_password')
+        POSTGRES_DB = credentials('postgres_db')
+        PGPORT = credentials('postgres_port')
+        SWEEP_PORT = credentials('sweep_port')
+    }
+
+    stages {
+        stage('Get Hostname') {
+            steps {
+                script {
+                    env.EXEC_HOST = sh(script: "hostname", returnStdout: true).trim()
+                    echo "Running on host: ${env.EXEC_HOST}"
+                }
+            }
+        }
+
+        stage('Cancel Existing Sweep Jobs') {
+            steps {
+                sh """
+                ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} '
+                    for jobname in "sweep_db" "sweep_server"; do
+                        jobids=\$(squeue -u ${SSH_USER} -n \$jobname -h -o "%i")
+                        if [ -n "\$jobids" ]; then
+                            echo "Cancelling \$jobname jobs: \$jobids"
+                            scancel \$jobids
+                        else
+                            echo "No jobs to cancel for \$jobname"
+                        fi
+                    done
+                '
+                """
+            }
+        }
+
+        stage('Launch sweep_db Server') {
+            steps {
+                script {
+                    env.DB_JOB_ID = sh(
+                        script: """
+                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} 'sbatch <<EOF
+#!/bin/bash
+#SBATCH --job-name=sweep_db
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=4G
+#SBATCH --time=06:00:00
+#SBATCH --output=${LOG_DIR}/sweep_db-%j.out
+#SBATCH --error=${LOG_DIR}/sweep_db-%j.err
+
+mkdir -p "${DB_PATH}"
+rm -f ${DB_PATH}/lib/postgresql/data/postmaster.pid
+rm -f ${DB_PATH}/run/postgresql/.s.PGSQL.5432{,.lock}
+
+
+singularity run --containall --cleanenv \\
+  --env POSTGRES_USER=\${POSTGRES_USER} \\
+  --env POSTGRES_PASSWORD=\${POSTGRES_PASSWORD} \\
+  --env POSTGRES_DB=\${POSTGRES_DB} \\
+  --env PGPORT=\${PGPORT} \\
+  --bind ${DB_PATH}:/var \\
+  docker://postgres:17
+EOF' | awk '/Submitted batch job/ {print \$4}'
+                        """,
+                        returnStdout: true
+                    ).trim()
+                    echo "Submitted sweep_db job with ID: ${env.DB_JOB_ID}"
+                }
+            }
+        }
+
+        stage('Launch sweep_server after sweep_db') {
+            steps {
+                script {
+                    sh """
+                    ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} 'sbatch <<EOF
+#!/bin/bash
+#SBATCH --job-name=sweep_server
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=4G
+#SBATCH --time=06:00:00
+#SBATCH --output=${LOG_DIR}/sweep_server-%j.out
+#SBATCH --error=${LOG_DIR}/sweep_server-%j.err
+#SBATCH --dependency=after:${env.DB_JOB_ID}+1
+
+singularity run --containall --cleanenv \\
+  --env DB_HOST=\$(sacct -j ${env.DB_JOB_ID} --format=NodeList -n | head -1 | tr -d ' ') \\
+  --env DB_PORT=\${PGPORT} \\
+  --env DB_NAME=\${POSTGRES_DB} \\
+  --env DB_USER=\${POSTGRES_USER} \\
+  --env DB_PASSWORD=\${POSTGRES_PASSWORD} \\
+  --env PORT=\${SWEEP_PORT} \\
+  docker://thewillyp/sweep-server:latest
+EOF'
+                    """
+                }
+            }
+        }
+    }
+}

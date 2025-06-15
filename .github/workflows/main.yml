@@ -33,6 +33,7 @@ jobs:
           tags: |
             type=ref,event=branch,suffix=-${{ github.run_number }}
             type=ref,event=pr
+            type=raw,value=latest
 
       - name: Login to DockerHub
         if: github.event_name != 'pull_request'
