@@ -46,8 +46,7 @@ pipeline {
                     script {
                         env.DB_JOB_ID = sh(
                             script: """
-                            ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} << 'EOF'
-sbatch << 'INNEREOF'
+                            ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} 'sbatch <<EOF
 #!/bin/bash
 #SBATCH --job-name=sweep_db
 #SBATCH --nodes=1
@@ -60,20 +59,19 @@ sbatch << 'INNEREOF'
 
 mkdir -p "${DB_PATH}"
 rm -f ${DB_PATH}/lib/postgresql/data/postmaster.pid
-rm -f ${DB_PATH}/run/postgresql/.s.PGSQL.\${PGPORT}{,.lock}
+rm -f ${DB_PATH}/run/postgresql/.s.PGSQL.5432{,.lock}
 
-singularity run --containall --cleanenv \
-  --env POSTGRES_USER=\${POSTGRES_USER} \
-  --env POSTGRES_PASSWORD=\${POSTGRES_PASSWORD} \
-  --env POSTGRES_DB=\${POSTGRES_DB} \
-  --env PGPORT=\${PGPORT} \
-  --bind ${DB_PATH}:/var \
+singularity run --containall --cleanenv \\
+  --env POSTGRES_USER=${POSTGRES_USER} \\
+  --env POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \\
+  --env POSTGRES_DB=${POSTGRES_DB} \\
+  --env PGPORT=${PGPORT} \\
+  --bind ${DB_PATH}:/var \\
   docker://postgres:17
-INNEREOF
-EOF
+EOF' | awk '/Submitted batch job/ {print \$4}'
                             """,
                             returnStdout: true
-                        ).trim().replaceAll('Submitted batch job ', '')
+                        ).trim()
                         echo "Submitted sweep_db job with ID: ${env.DB_JOB_ID}"
                     }
                 }
@@ -89,9 +87,9 @@ EOF
                     string(credentialsId: 'postgres_port', variable: 'PGPORT'),
                     string(credentialsId: 'sweep_port', variable: 'SWEEP_PORT')
                 ]) {
-                    sh """
-                    ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} << 'EOF'
-sbatch << 'INNEREOF'
+                    script {
+                        sh """
+                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} 'sbatch <<EOF
 #!/bin/bash
 #SBATCH --job-name=sweep_server
 #SBATCH --nodes=1
@@ -107,15 +105,15 @@ DB_HOST=\$(sacct -j ${env.DB_JOB_ID} --format=NodeList -n | head -1 | tr -d '[:s
 
 singularity run --containall --cleanenv \
   --env DB_HOST=\${DB_HOST} \
-  --env DB_PORT=\${PGPORT} \
-  --env DB_NAME=\${POSTGRES_DB} \
-  --env DB_USER=\${POSTGRES_USER} \
-  --env DB_PASSWORD=\${POSTGRES_PASSWORD} \
-  --env PORT=\${SWEEP_PORT} \
+  --env DB_PORT=${PGPORT} \\
+  --env DB_NAME=${POSTGRES_DB} \\
+  --env DB_USER=${POSTGRES_USER} \\
+  --env DB_PASSWORD=${POSTGRES_PASSWORD} \\
+  --env PORT=${SWEEP_PORT} \\
   docker://thewillyp/sweep-server:latest
-INNEREOF
-EOF
-                    """
+EOF'
+                        """
+                    }
                 }
             }
         }
