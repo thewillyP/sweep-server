@@ -5,12 +5,6 @@ pipeline {
         SSH_USER = 'wlp9800'
         LOG_DIR = "/vast/${SSH_USER}/logs"
         DB_PATH = "/scratch/${SSH_USER}/postgres"
-
-        POSTGRES_USER = credentials('postgres_user')
-        POSTGRES_PASSWORD = credentials('postgres_password')
-        POSTGRES_DB = credentials('postgres_db')
-        PGPORT = credentials('postgres_port')
-        SWEEP_PORT = credentials('sweep_port')
     }
 
     stages {
@@ -43,10 +37,16 @@ pipeline {
 
         stage('Launch sweep_db Server') {
             steps {
-                script {
-                    env.DB_JOB_ID = sh(
-                        script: """
-                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} 'sbatch <<EOF
+                withCredentials([
+                    string(credentialsId: 'postgres_user', variable: 'POSTGRES_USER'),
+                    string(credentialsId: 'postgres_password', variable: 'POSTGRES_PASSWORD'),
+                    string(credentialsId: 'postgres_db', variable: 'POSTGRES_DB'),
+                    string(credentialsId: 'postgres_port', variable: 'PGPORT')
+                ]) {
+                    script {
+                        env.DB_JOB_ID = sh(
+                            script: """
+                            ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} 'sbatch <<EOF
 #!/bin/bash
 #SBATCH --job-name=sweep_db
 #SBATCH --nodes=1
@@ -61,28 +61,35 @@ mkdir -p "${DB_PATH}"
 rm -f ${DB_PATH}/lib/postgresql/data/postmaster.pid
 rm -f ${DB_PATH}/run/postgresql/.s.PGSQL.5432{,.lock}
 
-
 singularity run --containall --cleanenv \\
-  --env POSTGRES_USER=\${POSTGRES_USER} \\
-  --env POSTGRES_PASSWORD=\${POSTGRES_PASSWORD} \\
-  --env POSTGRES_DB=\${POSTGRES_DB} \\
-  --env PGPORT=\${PGPORT} \\
+  --env POSTGRES_USER=${POSTGRES_USER} \\
+  --env POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \\
+  --env POSTGRES_DB=${POSTGRES_DB} \\
+  --env PGPORT=${PGPORT} \\
   --bind ${DB_PATH}:/var \\
   docker://postgres:17
 EOF' | awk '/Submitted batch job/ {print \$4}'
-                        """,
-                        returnStdout: true
-                    ).trim()
-                    echo "Submitted sweep_db job with ID: ${env.DB_JOB_ID}"
+                            """,
+                            returnStdout: true
+                        ).trim()
+                        echo "Submitted sweep_db job with ID: ${env.DB_JOB_ID}"
+                    }
                 }
             }
         }
 
         stage('Launch sweep_server after sweep_db') {
             steps {
-                script {
-                    sh """
-                    ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} 'sbatch <<EOF
+                withCredentials([
+                    string(credentialsId: 'postgres_user', variable: 'POSTGRES_USER'),
+                    string(credentialsId: 'postgres_password', variable: 'POSTGRES_PASSWORD'),
+                    string(credentialsId: 'postgres_db', variable: 'POSTGRES_DB'),
+                    string(credentialsId: 'postgres_port', variable: 'PGPORT'),
+                    string(credentialsId: 'sweep_port', variable: 'SWEEP_PORT')
+                ]) {
+                    script {
+                        sh """
+                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} 'sbatch <<EOF
 #!/bin/bash
 #SBATCH --job-name=sweep_server
 #SBATCH --nodes=1
@@ -96,14 +103,15 @@ EOF' | awk '/Submitted batch job/ {print \$4}'
 
 singularity run --containall --cleanenv \\
   --env DB_HOST=\$(sacct -j ${env.DB_JOB_ID} --format=NodeList -n | head -1 | tr -d ' ') \\
-  --env DB_PORT=\${PGPORT} \\
-  --env DB_NAME=\${POSTGRES_DB} \\
-  --env DB_USER=\${POSTGRES_USER} \\
-  --env DB_PASSWORD=\${POSTGRES_PASSWORD} \\
-  --env PORT=\${SWEEP_PORT} \\
+  --env DB_PORT=${PGPORT} \\
+  --env DB_NAME=${POSTGRES_DB} \\
+  --env DB_USER=${POSTGRES_USER} \\
+  --env DB_PASSWORD=${POSTGRES_PASSWORD} \\
+  --env PORT=${SWEEP_PORT} \\
   docker://thewillyp/sweep-server:latest
 EOF'
-                    """
+                        """
+                    }
                 }
             }
         }
