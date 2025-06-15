@@ -46,7 +46,8 @@ pipeline {
                     script {
                         env.DB_JOB_ID = sh(
                             script: """
-                            ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} 'sbatch <<EOF
+                            ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} << 'EOF'
+sbatch << 'INNEREOF'
 #!/bin/bash
 #SBATCH --job-name=sweep_db
 #SBATCH --nodes=1
@@ -59,19 +60,20 @@ pipeline {
 
 mkdir -p "${DB_PATH}"
 rm -f ${DB_PATH}/lib/postgresql/data/postmaster.pid
-rm -f ${DB_PATH}/run/postgresql/.s.PGSQL.5432{,.lock}
+rm -f ${DB_PATH}/run/postgresql/.s.PGSQL.\${PGPORT}{,.lock}
 
-singularity run --containall --cleanenv \\
-  --env POSTGRES_USER=${POSTGRES_USER} \\
-  --env POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \\
-  --env POSTGRES_DB=${POSTGRES_DB} \\
-  --env PGPORT=${PGPORT} \\
-  --bind ${DB_PATH}:/var \\
+singularity run --containall --cleanenv \
+  --env POSTGRES_USER=\${POSTGRES_USER} \
+  --env POSTGRES_PASSWORD=\${POSTGRES_PASSWORD} \
+  --env POSTGRES_DB=\${POSTGRES_DB} \
+  --env PGPORT=\${PGPORT} \
+  --bind ${DB_PATH}:/var \
   docker://postgres:17
-EOF' | awk '/Submitted batch job/ {print \$4}'
+INNEREOF
+EOF
                             """,
                             returnStdout: true
-                        ).trim()
+                        ).trim().replaceAll('Submitted batch job ', '')
                         echo "Submitted sweep_db job with ID: ${env.DB_JOB_ID}"
                     }
                 }
@@ -87,9 +89,9 @@ EOF' | awk '/Submitted batch job/ {print \$4}'
                     string(credentialsId: 'postgres_port', variable: 'PGPORT'),
                     string(credentialsId: 'sweep_port', variable: 'SWEEP_PORT')
                 ]) {
-                    script {
-                        sh """
-                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} 'sbatch <<EOF
+                    sh """
+                    ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} << 'EOF'
+sbatch << 'INNEREOF'
 #!/bin/bash
 #SBATCH --job-name=sweep_server
 #SBATCH --nodes=1
@@ -101,17 +103,19 @@ EOF' | awk '/Submitted batch job/ {print \$4}'
 #SBATCH --error=${LOG_DIR}/sweep_server-%j.err
 #SBATCH --dependency=after:${env.DB_JOB_ID}+1
 
-singularity run --containall --cleanenv \\
-  --env DB_HOST=\$(sacct -j ${env.DB_JOB_ID} --format=NodeList -n | head -1 | tr -d ' ') \\
-  --env DB_PORT=${PGPORT} \\
-  --env DB_NAME=${POSTGRES_DB} \\
-  --env DB_USER=${POSTGRES_USER} \\
-  --env DB_PASSWORD=${POSTGRES_PASSWORD} \\
-  --env PORT=${SWEEP_PORT} \\
+DB_HOST=\$(sacct -j ${env.DB_JOB_ID} --format=NodeList -n | head -1 | tr -d '[:space:]')
+
+singularity run --containall --cleanenv \
+  --env DB_HOST=\${DB_HOST} \
+  --env DB_PORT=\${PGPORT} \
+  --env DB_NAME=\${POSTGRES_DB} \
+  --env DB_USER=\${POSTGRES_USER} \
+  --env DB_PASSWORD=\${POSTGRES_PASSWORD} \
+  --env PORT=\${SWEEP_PORT} \
   docker://thewillyp/sweep-server:latest
-EOF'
-                        """
-                    }
+INNEREOF
+EOF
+                    """
                 }
             }
         }
