@@ -59,13 +59,13 @@ pipeline {
 
 mkdir -p "${DB_PATH}"
 rm -f ${DB_PATH}/lib/postgresql/data/postmaster.pid
-rm -f ${DB_PATH}/run/postgresql/.s.PGSQL.5432{,.lock}
+rm -f ${DB_PATH}/run/postgresql/.s.PGSQL.\${PGPORT}{,.lock}
 
 singularity run --containall --cleanenv \\
-  --env POSTGRES_USER=${POSTGRES_USER} \\
-  --env POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \\
-  --env POSTGRES_DB=${POSTGRES_DB} \\
-  --env PGPORT=${PGPORT} \\
+  --env POSTGRES_USER=\${POSTGRES_USER} \\
+  --env POSTGRES_PASSWORD=\${POSTGRES_PASSWORD} \\
+  --env POSTGRES_DB=\${POSTGRES_DB} \\
+  --env PGPORT=\${PGPORT} \\
   --bind ${DB_PATH}:/var \\
   docker://postgres:17
 EOF' | awk '/Submitted batch job/ {print \$4}'
@@ -101,13 +101,21 @@ EOF' | awk '/Submitted batch job/ {print \$4}'
 #SBATCH --error=${LOG_DIR}/sweep_server-%j.err
 #SBATCH --dependency=after:${env.DB_JOB_ID}+1
 
+DB_HOST=\$(sacct -j ${env.DB_JOB_ID} --format=NodeList -n | head -1)
+if [ -n "\$DB_HOST" ]; then
+  DB_HOST=\$(echo "\$DB_HOST" | tr -d ' ')
+else
+  echo "Error: Could not retrieve DB_HOST for job ${env.DB_JOB_ID}" >&2
+  exit 1
+fi
+
 singularity run --containall --cleanenv \\
-  --env DB_HOST=\$(sacct -j ${env.DB_JOB_ID} --format=NodeList -n | head -1 | tr -d ' ') \\
-  --env DB_PORT=${PGPORT} \\
-  --env DB_NAME=${POSTGRES_DB} \\
-  --env DB_USER=${POSTGRES_USER} \\
-  --env DB_PASSWORD=${POSTGRES_PASSWORD} \\
-  --env PORT=${SWEEP_PORT} \\
+  --env DB_HOST=\${DB_HOST} \\
+  --env DB_PORT=\${PGPORT} \\
+  --env DB_NAME=\${POSTGRES_DB} \\
+  --env DB_USER=\${POSTGRES_USER} \\
+  --env DB_PASSWORD=\${POSTGRES_PASSWORD} \\
+  --env PORT=\${SWEEP_PORT} \\
   docker://thewillyp/sweep-server:latest
 EOF'
                         """
