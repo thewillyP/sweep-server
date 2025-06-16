@@ -44,10 +44,7 @@ pipeline {
                     string(credentialsId: 'postgres_port', variable: 'PGPORT')
                 ]) {
                     script {
-                        env.DB_JOB_ID = sh(
-                            script: """
-                            ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} 'sbatch <<EOF
-#!/bin/bash
+                        def sweepDbScript = """#!/bin/bash
 #SBATCH --job-name=sweep_db
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -68,10 +65,19 @@ singularity run --containall --cleanenv \\
   --env PGPORT=${PGPORT} \\
   --bind ${DB_PATH}:/var \\
   docker://postgres:17
-EOF' | awk '/Submitted batch job/ {print \$4}'
-                            """,
-                            returnStdout: true
-                        ).trim()
+"""
+
+                        // Escape $ to prevent Groovy interpolation inside the script
+                        def escapedSweepDbScript = sweepDbScript.replace('$', '\\$')
+
+                        env.DB_JOB_ID = sh(
+                            script: """
+                            ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} sbatch << 'EOF'
+${escapedSweepDbScript}
+EOF
+                            """, returnStdout: true
+                        ).trim().replaceAll(/.*Submitted batch job (\d+).*/, '$1')
+
                         echo "Submitted sweep_db job with ID: ${env.DB_JOB_ID}"
                     }
                 }
@@ -88,9 +94,7 @@ EOF' | awk '/Submitted batch job/ {print \$4}'
                     string(credentialsId: 'sweep_port', variable: 'SWEEP_PORT')
                 ]) {
                     script {
-                        sh """
-                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} 'sbatch <<EOF
-#!/bin/bash
+                        def sweepServerScript = """#!/bin/bash
 #SBATCH --job-name=sweep_server
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -101,7 +105,7 @@ EOF' | awk '/Submitted batch job/ {print \$4}'
 #SBATCH --error=${LOG_DIR}/sweep_server-%j.err
 #SBATCH --dependency=after:${env.DB_JOB_ID}
 
-DB_HOST=\$(scontrol show job ${env.DB_JOB_ID} | awk \'/NodeList=/{for(i=1;i<=NF;i++) if(\$i ~ /^NodeList=/) {split(\$i,a,"="); print a[2]}}\')
+DB_HOST=\$(scontrol show job ${env.DB_JOB_ID} | awk '/NodeList=/{for(i=1;i<=NF;i++) if(\$i ~ /^NodeList=/) {split(\$i,a,"="); print a[2]}}')
 echo "Evaluated: DB_HOST=\$DB_HOST for job ${env.DB_JOB_ID}"
 
 singularity run --containall --cleanenv \\
@@ -112,7 +116,14 @@ singularity run --containall --cleanenv \\
   --env DB_PASSWORD=${POSTGRES_PASSWORD} \\
   --env PORT=${SWEEP_PORT} \\
   docker://thewillyp/sweep-server:latest
-EOF'
+"""
+
+                        def escapedSweepServerScript = sweepServerScript.replace('$', '\\$')
+
+                        sh """
+                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} sbatch << 'EOF'
+${escapedSweepServerScript}
+EOF
                         """
                     }
                 }
