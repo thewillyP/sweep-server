@@ -101,9 +101,9 @@ EOF' | awk '/Submitted batch job/ {print \$4}'
 #SBATCH --error=${LOG_DIR}/sweep_server-%j.err
 #SBATCH --dependency=after:${env.DB_JOB_ID}
 
+echo "Running: DB_HOST=\$(sacct -j ${env.DB_JOB_ID} --format=NodeList -n | head -1 | tr -d '[:space:]')"
 DB_HOST=\$(sacct -j ${env.DB_JOB_ID} --format=NodeList -n | head -1 | tr -d '[:space:]')
-echo "\\\$(sacct -j ${env.DB_JOB_ID} --format=NodeList -n)"
-echo "DB_HOST is \$DB_HOST for job ${env.DB_JOB_ID}"
+echo "Evaluated: DB_HOST=\$DB_HOST for job ${env.DB_JOB_ID}"
 
 singularity run --containall --cleanenv \
   --env DB_HOST=\$DB_HOST \\
