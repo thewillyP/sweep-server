@@ -67,13 +67,10 @@ singularity run --containall --cleanenv \\
   docker://postgres:17
 """
 
-                        // Escape $ to prevent Groovy interpolation inside the script
-                        def escapedSweepDbScript = sweepDbScript.replace('$', '\\$')
-
                         env.DB_JOB_ID = sh(
                             script: """
-                            ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} sbatch << 'EOF'
-${escapedSweepDbScript}
+                            ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} sbatch <<EOF
+${sweepDbScript}
 EOF
                             """, returnStdout: true
                         ).trim().replaceAll(/.*Submitted batch job (\d+).*/, '$1')
@@ -118,11 +115,9 @@ singularity run --containall --cleanenv \\
   docker://thewillyp/sweep-server:latest
 """
 
-                        def escapedSweepServerScript = sweepServerScript.replace('$', '\\$')
-
                         sh """
-                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} sbatch << 'EOF'
-${escapedSweepServerScript}
+                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} sbatch <<EOF
+${sweepServerScript}
 EOF
                         """
                     }
