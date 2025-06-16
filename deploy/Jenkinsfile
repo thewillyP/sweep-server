@@ -69,7 +69,7 @@ singularity run --containall --cleanenv \\
 
                         env.DB_JOB_ID = sh(
                             script: """
-                            ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} sbatch <<EOF
+                            ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} sbatch <<'EOF'
 ${sweepDbScript}
 EOF
                             """, returnStdout: true
@@ -102,6 +102,9 @@ EOF
 #SBATCH --error=${LOG_DIR}/sweep_server-%j.err
 #SBATCH --dependency=after:${env.DB_JOB_ID}
 
+echo "=== Raw scontrol output for DB_JOB_ID: ${env.DB_JOB_ID} ==="
+scontrol show job ${env.DB_JOB_ID}
+
 DB_HOST=\$(scontrol show job ${env.DB_JOB_ID} | awk '/NodeList=/{for(i=1;i<=NF;i++) if(\$i ~ /^NodeList=/) {split(\$i,a,"="); print a[2]}}')
 echo "Evaluated: DB_HOST=\$DB_HOST for job ${env.DB_JOB_ID}"
 
@@ -116,7 +119,7 @@ singularity run --containall --cleanenv \\
 """
 
                         sh """
-                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} sbatch <<EOF
+                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} sbatch <<'EOF'
 ${sweepServerScript}
 EOF
                         """
