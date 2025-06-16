@@ -89,7 +89,7 @@ EOF' | awk '/Submitted batch job/ {print \$4}'
                 ]) {
                     script {
                         sh """
-                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} 'sbatch <<EOF
+                        ssh -o StrictHostKeyChecking=no ${SSH_USER}@${EXEC_HOST} "sbatch <<EOF
 #!/bin/bash
 #SBATCH --job-name=sweep_server
 #SBATCH --nodes=1
@@ -101,10 +101,10 @@ EOF' | awk '/Submitted batch job/ {print \$4}'
 #SBATCH --error=${LOG_DIR}/sweep_server-%j.err
 #SBATCH --dependency=after:${env.DB_JOB_ID}
 
-DB_HOST=\$(scontrol show job ${env.DB_JOB_ID} | awk '/NodeList=/{for (i=1;i<=NF;i++) if (\\\$i ~ /^NodeList=/) { split(\\\$i,a,"="); print a[2] }}')
+DB_HOST=\$(scontrol show job ${env.DB_JOB_ID} | awk '/NodeList=/{for (i=1;i<=NF;i++) if (\$i ~ /^NodeList=/) { split(\$i,a,"="); print a[2] }}')
 echo "Evaluated: DB_HOST=\$DB_HOST for job ${env.DB_JOB_ID}"
 
-singularity run --containall --cleanenv \
+singularity run --containall --cleanenv \\
   --env DB_HOST=\$DB_HOST \\
   --env DB_PORT=${PGPORT} \\
   --env DB_NAME=${POSTGRES_DB} \\
@@ -112,7 +112,7 @@ singularity run --containall --cleanenv \
   --env DB_PASSWORD=${POSTGRES_PASSWORD} \\
   --env PORT=${SWEEP_PORT} \\
   docker://thewillyp/sweep-server:latest
-EOF'
+EOF"
                         """
                     }
                 }
