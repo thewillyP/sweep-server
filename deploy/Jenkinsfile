@@ -100,7 +100,7 @@ EOF
 #SBATCH --time=06:00:00
 #SBATCH --output=${LOG_DIR}/sweep_server-%j.out
 #SBATCH --error=${LOG_DIR}/sweep_server-%j.err
-#SBATCH --dependency=after:${env.DB_JOB_ID}
+#SBATCH --dependency=after:${env.DB_JOB_ID}+1
 
 echo "=== Raw scontrol output for DB_JOB_ID: ${env.DB_JOB_ID} ==="
 scontrol show job ${env.DB_JOB_ID}
